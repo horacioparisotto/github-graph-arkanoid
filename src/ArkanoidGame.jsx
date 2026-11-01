@@ -126,7 +126,7 @@ const POWERUP_NAMES = {
   shield: 'branch protection: safety net',
   pin: 'tag: sticky bomb',
   gravity: 'LFS: heavy ball',
-  pipeline: 'infinite loop: top and bottom are connected',
+  pipeline: 'infinite loop: what falls comes back from the top',
   revert: 'revert: slow motion',
   amend: 'WIP: catch & aim',
   invert: 'merge conflict: controls reversed',
@@ -2003,12 +2003,8 @@ const ArkanoidGame = ({ active, onExit, gridRef }) => {
           ball.vx = -ball.vx;
         }
         if (ball.y - ball.r < 0) {
-          if (!s.mods.pipeline) {
-            ball.y = ball.r;
-            ball.vy = -ball.vy;
-          } else if (ball.vy < 0) {
-            ball.y = height + ball.r - 1; // pipeline loops both ways: out the top, in from the bottom
-          }
+          ball.y = ball.r;
+          ball.vy = -ball.vy;
         }
 
         // Paddle collision (handles wrap-around + double paddle: paddle can be in multiple positions)
@@ -2064,7 +2060,7 @@ const ArkanoidGame = ({ active, onExit, gridRef }) => {
         // Fell off bottom. With pipeline on, it comes back in from the top.
         if (ball.y - ball.r > height) {
           if (s.mods.pipeline) {
-            ball.y = -ball.r;
+            ball.y = ball.r;
             ball.vy = Math.abs(ball.vy);
             continue;
           }
@@ -2520,30 +2516,22 @@ const ArkanoidGame = ({ active, onExit, gridRef }) => {
         ctx.restore();
       }
 
-      // Pipeline: both edges burn like a portal while it is active, the ball goes in one and out
-      // the other. The top one is the bottom one flipped.
+      // Pipeline: the bottom edge burns like a portal while it is active, and the ball comes back
+      // in from the top.
       if (s.mods.pipeline) {
         const blink = expiringAlpha(s.mods.pipeline, now);
         const barH = 8;
-        const drawFire = () => {
-          const grad = ctx.createLinearGradient(0, height - barH * 2, 0, height);
-          grad.addColorStop(0, 'rgba(255, 166, 87, 0)');
-          grad.addColorStop(0.5, `rgba(255, 123, 0, ${0.55 * blink})`);
-          grad.addColorStop(1, `rgba(248, 81, 73, ${0.95 * blink})`);
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, height - barH * 2, width, barH * 2);
-          ctx.fillStyle = `rgba(255, 220, 120, ${(0.6 + Math.sin(now / 90) * 0.3) * blink})`;
-          for (let fx = (now / 12) % 24; fx < width; fx += 24) {
-            const fh = 3 + Math.abs(Math.sin(fx * 0.3 + now / 120)) * 5;
-            ctx.fillRect(fx, height - fh, 10, fh);
-          }
-        };
-        drawFire();
-        ctx.save();
-        ctx.translate(0, height);
-        ctx.scale(1, -1);
-        drawFire();
-        ctx.restore();
+        const grad = ctx.createLinearGradient(0, height - barH * 2, 0, height);
+        grad.addColorStop(0, 'rgba(255, 166, 87, 0)');
+        grad.addColorStop(0.5, `rgba(255, 123, 0, ${0.55 * blink})`);
+        grad.addColorStop(1, `rgba(248, 81, 73, ${0.95 * blink})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, height - barH * 2, width, barH * 2);
+        ctx.fillStyle = `rgba(255, 220, 120, ${(0.6 + Math.sin(now / 90) * 0.3) * blink})`;
+        for (let fx = (now / 12) % 24; fx < width; fx += 24) {
+          const fh = 3 + Math.abs(Math.sin(fx * 0.3 + now / 120)) * 5;
+          ctx.fillRect(fx, height - fh, 10, fh);
+        }
       }
 
       // Projectiles
