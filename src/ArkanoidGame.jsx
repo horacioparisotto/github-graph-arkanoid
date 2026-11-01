@@ -197,7 +197,7 @@ const MOD_DURATIONS = {
   paintball: 8000,
   lava: 8000,
   merge: 10000,
-  pong: 8000,
+  pong: 15000,
   duck: 10000,
   dark: 6000,
   coffee: 6000,
@@ -380,11 +380,12 @@ const FLAPPER_FLAP = 6;
 const FROG_MAX = 10;
 const FROG_HOP_MS = 110;
 const FROG_SIDE_COLS = 3; // columns covered by a sideways hop
-const SLASH_RISE_MS = 420;
-const SLASH_SWEEP_MS = 140;
-const SLASH_MS = 1100;
-const SLASH_LINE_MAX = 4; // commits on the blade's line
-const SLASH_FRUIT_BREAK = 2; // commits around each fruit
+const SLASH_RISE_MS = 650;
+const SLASH_SWEEP_MS = 260;
+const SLASH_STAGGER_MS = 600; // between one fruit and the next
+const SLASH_FALL_MS = 900; // how long the halves stay after the last cut
+const SLASH_REACH = 80; // half the length of each blade stroke
+const SLASH_FRUIT_BREAK = 3; // commits around each fruit
 const SLASH_FRUIT_REACH = 34;
 const SLASH_FRUITS = [
   { rind: '#2EA043', flesh: '#F85149' },
@@ -1255,65 +1256,62 @@ const ArkanoidGame = ({ active, onExit, gridRef }) => {
       if (f.x < -40 || f.x > width + 40) s.flapper = null;
     };
 
-    // Slash: three fruits fly up onto a diagonal, and a blade cuts them and the commits on its line.
+    // Slash: three fruits fly up, one at a time, to different parts of the graph. A blade stroke
+    // cuts each one and breaks the commits around it.
     const startSlash = (s, now) => {
       const live = s.blocks.filter(b => b.alive);
       if (!live.length) return;
-      const span = Math.min(width * 0.3, 240);
-      const center = span + Math.random() * (width - span * 2);
-      const flip = Math.random() > 0.5 ? 1 : -1;
-      const from = { x: center - flip * span, y: gridBottom(s) + 10 };
-      const to = { x: center + flip * span, y: gridTop(s) - 10 };
-      const lineX = to.x - from.x;
-      const lineY = to.y - from.y;
-      const along = (x, y) => ((x - from.x) * lineX + (y - from.y) * lineY) / (lineX * lineX + lineY * lineY);
-      const onLine = live
-        .map(block => ({ block, at: along(block.x + block.w / 2, block.y + block.h / 2) }))
-        .filter(({ block, at }) => Math.hypot(block.x + block.w / 2 - (from.x + at * lineX), block.y + block.h / 2 - (from.y + at * lineY)) < block.h)
-        .sort((a, b) => a.at - b.at);
-      const step = Math.max(1, onLine.length / SLASH_LINE_MAX);
-      const cuts = Array.from({ length: Math.min(SLASH_LINE_MAX, onLine.length) }, (_, i) => onLine[Math.floor(i * step)]);
+      const zone = width / SLASH_FRUITS.length;
+      const zones = SLASH_FRUITS.map((_, i) => i).sort(() => Math.random() - 0.5);
       const fruits = SLASH_FRUITS.map((fruit, i) => {
-        const at = 0.25 + i * 0.25;
-        const toX = from.x + at * lineX;
-        return { fruit, at, fromX: toX + (i - 1) * 60, toX, toY: from.y + at * lineY, cut: false };
+        const inZone = live.filter(b => Math.floor((b.x + b.w / 2) / zone) === zones[i]);
+        const pool = inZone.length ? inZone : live;
+        const target = pool[Math.floor(Math.random() * pool.length)];
+        const x = target.x + target.w / 2;
+        const y = target.y + target.h / 2;
+        const flip = Math.random() > 0.5 ? 1 : -1;
+        return {
+          fruit,
+          x,
+          y,
+          fromX: x + (Math.random() - 0.5) * 80,
+          from: { x: x - flip * SLASH_REACH, y: y + SLASH_REACH * 0.6 },
+          to: { x: x + flip * SLASH_REACH, y: y - SLASH_REACH * 0.6 },
+          start: now + i * SLASH_STAGGER_MS,
+          cut: false,
+          halves: [],
+        };
       });
-      s.slash = { from, to, start: now, fruits, cuts, halves: [] };
+      s.slash = { fruits, end: fruits[fruits.length - 1].start + SLASH_RISE_MS + SLASH_SWEEP_MS + SLASH_FALL_MS };
     };
 
     const updateSlash = (s, dt, now) => {
       const c = s.slash;
       if (!c) return;
-      const sweep = (now - c.start - SLASH_RISE_MS) / SLASH_SWEEP_MS;
-      while (c.cuts.length && c.cuts[0].at <= sweep) {
-        const { block } = c.cuts.shift();
-        if (block.alive) {
-          s.explosions.push({ x: block.x + block.w / 2, y: block.y + block.h / 2, startTime: now, duration: 220 });
-          destroyBlock(block, now);
-        }
-      }
       for (const f of c.fruits) {
-        if (f.cut || f.at > sweep) continue;
-        f.cut = true;
-        s.blocks
-          .filter(b => b.alive && Math.hypot(b.x + b.w / 2 - f.toX, b.y + b.h / 2 - f.toY) < SLASH_FRUIT_REACH)
-          .sort((a, b) => Math.hypot(a.x - f.toX, a.y - f.toY) - Math.hypot(b.x - f.toX, b.y - f.toY))
-          .slice(0, SLASH_FRUIT_BREAK)
-          .forEach((b) => {
-            s.explosions.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, startTime: now, duration: 220 });
-            destroyBlock(b, now);
-          });
-        for (const side of [-1, 1]) {
-          c.halves.push({ fruit: f.fruit, x: f.toX, y: f.toY, vx: side * 2.4, vy: -2.5, spin: side > 0 ? 0 : Math.PI });
+        // The fruit is cut when the blade reaches the middle of its stroke
+        if (!f.cut && now - f.start >= SLASH_RISE_MS + SLASH_SWEEP_MS / 2) {
+          f.cut = true;
+          s.blocks
+            .filter(b => b.alive && Math.hypot(b.x + b.w / 2 - f.x, b.y + b.h / 2 - f.y) < SLASH_FRUIT_REACH)
+            .sort((a, b) => Math.hypot(a.x + a.w / 2 - f.x, a.y + a.h / 2 - f.y) - Math.hypot(b.x + b.w / 2 - f.x, b.y + b.h / 2 - f.y))
+            .slice(0, SLASH_FRUIT_BREAK)
+            .forEach((b) => {
+              s.explosions.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, startTime: now, duration: 220 });
+              destroyBlock(b, now);
+            });
+          for (const side of [-1, 1]) {
+            f.halves.push({ fruit: f.fruit, x: f.x, y: f.y, vx: side * 2.4, vy: -2.5, spin: side > 0 ? 0 : Math.PI });
+          }
+        }
+        for (const half of f.halves) {
+          half.vy += 0.4 * dt;
+          half.x += half.vx * dt;
+          half.y += half.vy * dt;
+          half.spin += 0.12 * dt;
         }
       }
-      for (const half of c.halves) {
-        half.vy += 0.4 * dt;
-        half.x += half.vx * dt;
-        half.y += half.vy * dt;
-        half.spin += 0.12 * dt;
-      }
-      if (now - c.start > SLASH_MS) s.slash = null;
+      if (now > c.end) s.slash = null;
     };
 
     // Frog: hops up the graph, two rows then sideways, breaking the commit it lands on.
@@ -2722,29 +2720,31 @@ const ArkanoidGame = ({ active, onExit, gridRef }) => {
         ctx.restore();
       }
       if (s.slash) {
-        const c = s.slash;
-        const elapsedSlash = now - c.start;
-        const sweep = (elapsedSlash - SLASH_RISE_MS) / SLASH_SWEEP_MS;
         ctx.save();
         ctx.shadowBlur = 0;
-        const rise = 1 - (1 - Math.min(1, elapsedSlash / SLASH_RISE_MS)) ** 2;
-        for (const f of c.fruits) {
-          if (!f.cut) drawFruit(ctx, f.fromX + (f.toX - f.fromX) * rise, height + 20 + (f.toY - height - 20) * rise, f.fruit);
-        }
-        for (const half of c.halves) drawFruitHalf(ctx, half);
-        if (sweep > 0 && sweep < 3) {
-          const head = Math.min(1, sweep);
-          const tail = Math.min(1, Math.max(0, (sweep - 0.4) / 2));
-          ctx.globalAlpha = 1 - sweep / 3;
-          ctx.strokeStyle = '#FFFFFF';
-          ctx.shadowColor = '#FFFFFF';
-          ctx.shadowBlur = 12;
-          ctx.lineWidth = 3;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(c.from.x + (c.to.x - c.from.x) * tail, c.from.y + (c.to.y - c.from.y) * tail);
-          ctx.lineTo(c.from.x + (c.to.x - c.from.x) * head, c.from.y + (c.to.y - c.from.y) * head);
-          ctx.stroke();
+        for (const f of s.slash.fruits) {
+          const age = now - f.start;
+          if (age < 0) continue;
+          const rise = 1 - (1 - Math.min(1, age / SLASH_RISE_MS)) ** 2;
+          if (!f.cut) drawFruit(ctx, f.fromX + (f.x - f.fromX) * rise, height + 20 + (f.y - height - 20) * rise, f.fruit);
+          for (const half of f.halves) drawFruitHalf(ctx, half);
+          const sweep = (age - SLASH_RISE_MS) / SLASH_SWEEP_MS;
+          if (sweep > 0 && sweep < 3) {
+            const head = Math.min(1, sweep);
+            const tail = Math.min(1, Math.max(0, (sweep - 0.4) / 2));
+            ctx.save();
+            ctx.globalAlpha = 1 - sweep / 3;
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.shadowColor = '#FFFFFF';
+            ctx.shadowBlur = 12;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(f.from.x + (f.to.x - f.from.x) * tail, f.from.y + (f.to.y - f.from.y) * tail);
+            ctx.lineTo(f.from.x + (f.to.x - f.from.x) * head, f.from.y + (f.to.y - f.from.y) * head);
+            ctx.stroke();
+            ctx.restore();
+          }
         }
         ctx.restore();
       }
