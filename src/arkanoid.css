@@ -1,0 +1,161 @@
+.arkanoid-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.arkanoid-canvas {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.arkanoid-canvas-playing {
+  cursor: none;
+}
+
+.arkanoid-hud {
+  position: absolute;
+  top: -32px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #9CA3AF;
+  font-size: 12px;
+  pointer-events: auto;
+  gap: 16px;
+}
+
+.arkanoid-lives {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.arkanoid-lives-label {
+  margin-right: 2px;
+}
+
+.arkanoid-life {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  box-shadow: 0 0 6px rgba(57, 211, 83, 0.6);
+  display: inline-block;
+  transition: opacity 0.3s ease, background-color 0.3s ease;
+}
+
+.arkanoid-life-lost {
+  background-color: transparent;
+  box-shadow: none;
+  border: 1px solid #4B5563;
+}
+
+.arkanoid-exit {
+  background: transparent;
+  color: #9CA3AF;
+  border: 1px solid #374151;
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.arkanoid-exit:hover {
+  color: #39D353;
+  border-color: #39D353;
+}
+
+.arkanoid-result {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid #39D353;
+  border-radius: 8px;
+  padding: 24px 32px;
+  color: #ffffff;
+  font-size: 18px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  pointer-events: auto;
+  box-shadow: 0 0 40px rgba(57, 211, 83, 0.3);
+}
+
+.arkanoid-best {
+  color: #FFD33D;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.arkanoid-reward-message {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+}
+
+/* Pinball marquee: the disco colors run through the letters, under a warm glow. */
+.arkanoid-reward-headline {
+  font-size: clamp(20px, 3.4vw, 30px);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #FF4D9D, #FFD33D, #39D353, #3FB8FF, #B072FF, #FF4D9D) 0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 7px rgba(255, 211, 61, 0.75));
+  animation: arkanoid-marquee 2.4s linear infinite, arkanoid-marquee-glow 1.2s ease-in-out infinite alternate;
+}
+
+.arkanoid-reward-subhead {
+  color: #FFD33D;
+  font-size: 15px;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(255, 211, 61, 0.6);
+}
+
+@keyframes arkanoid-marquee {
+  to { background-position: 200% 0; }
+}
+
+@keyframes arkanoid-marquee-glow {
+  to { filter: drop-shadow(0 0 14px rgba(255, 77, 157, 0.9)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arkanoid-reward-headline {
+    animation: none;
+  }
+}
+
+.arkanoid-result-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+/* The win screen holds a video, taller than the contribution grid: center it on the viewport,
+   above the sticky header */
+.arkanoid-result--reward {
+  position: fixed;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.95);
+}
+
+.arkanoid-reward-video {
+  width: min(560px, 80vw, (100vh - 290px) * 16 / 9);
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 6px;
+}
